@@ -45,6 +45,19 @@ El ejecutable se genera en:
 Enfoque\bin\Debug\net8.0-windows\Enfoque.exe
 ```
 
+## Generar el instalador
+
+El instalador usa Inno Setup y crea un acceso directo en el menú Inicio.
+Para generar una versión:
+
+```powershell
+.\build-installer.ps1 -Version 1.0.0
+```
+
+El archivo se genera en `artifacts\installer`. Para una actualización futura
+usa una versión superior, por ejemplo `1.0.1`; el mismo `AppId` hará que el
+instalador actualice la instalación existente.
+
 ## Estructura principal
 
 - `MainWindow`: ventana inicial y coordinación general.

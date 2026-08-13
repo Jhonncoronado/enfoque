@@ -8,6 +8,7 @@
 # Resultados de compilación y archivos temporales
 *.pdb
 *.cache
+artifacts/
 
 # Respaldos locales y paquetes comprimidos
 respaldo/
