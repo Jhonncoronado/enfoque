@@ -56,4 +56,4 @@ Enfoque\bin\Debug\net8.0-windows\Enfoque.exe
 
 ## Licencia
 
-Agregar aquí la licencia que se desee utilizar antes de publicar el proyecto.
+Este proyecto se distribuye bajo la licencia [MIT](LICENSE).
