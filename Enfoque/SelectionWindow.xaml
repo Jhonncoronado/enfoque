@@ -1,0 +1,22 @@
+<Window x:Class="Enfoque.SelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" Topmost="True" ResizeMode="NoResize"
+        WindowStartupLocation="Manual" Focusable="True">
+    <Canvas x:Name="SelectionCanvas" Background="Transparent" Focusable="True"
+            MouseLeftButtonDown="SelectionCanvas_MouseLeftButtonDown"
+            MouseMove="SelectionCanvas_MouseMove"
+            MouseLeftButtonUp="SelectionCanvas_MouseLeftButtonUp">
+        <Path x:Name="SelectionMask" Fill="#CC000000" IsHitTestVisible="False" />
+        <Path x:Name="SelectionOutline" Stroke="White" StrokeThickness="3"
+              StrokeDashArray="6,4" Fill="Transparent" Visibility="Collapsed"
+              IsHitTestVisible="False" />
+        <Border Background="#CC1F2937" CornerRadius="6" Padding="12,8"
+                Canvas.Left="18" Canvas.Top="18">
+            <TextBlock x:Name="InstructionText"
+                       Text="MantÃ©n presionado el botÃ³n izquierdo y arrastra. Repite para agregar Ã¡reas. ENTER terminar | ESC cancelar"
+                       Foreground="White" FontSize="13" />
+        </Border>
+    </Canvas>
+</Window>

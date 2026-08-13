@@ -1,0 +1,18 @@
+# Visual Studio y archivos generados de .NET
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Resultados de compilación y archivos temporales
+*.pdb
+*.cache
+
+# Respaldos locales y paquetes comprimidos
+respaldo/
+*.zip
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
