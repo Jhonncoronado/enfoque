@@ -1,7 +1,13 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Diagnostics;
+using Microsoft.Win32;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Windows.Automation;
@@ -29,6 +35,8 @@ public partial class OverlayWindow : Window
     private double _darkness;
     private readonly ControlPanelWindow _controlPanel;
     private readonly DispatcherTimer _followTimer;
+    private readonly DispatcherTimer _taskManagerTimer;
+    private readonly DispatcherTimer _obfuscationTimer;
     private readonly RelatedWindowTracker? _relatedTracker = null;
     private bool _followMouse;
     private bool _isPaused;
@@ -37,6 +45,18 @@ public partial class OverlayWindow : Window
     private IntPtr _trackedWindow;
     private List<FocusArea> _textAreas = [];
     private TextHighlightOptions _textOptions = new(false, string.Empty);
+    private ColorInversionMode _colorInversionMode = ColorInversionMode.None;
+    private readonly List<MagnifierWindow> _inversionHosts = [];
+    private bool _pausedByTaskManager;
+    private bool _wasPausedBeforeTaskManager;
+    private bool _windowsColorFilterChanged;
+    private object? _previousFilterActive;
+    private object? _previousFilterType;
+    private object? _previousAccessibilityConfiguration;
+    private bool _obfuscateBackground;
+    private bool _nightThemeActive;
+    private System.Windows.Media.Color _darknessColor =
+        System.Windows.Media.Colors.Black;
 
     public event Action? AddAreaRequested;
     public event Action<int>? EditAreaRequested;
@@ -67,6 +87,9 @@ public partial class OverlayWindow : Window
         _controlPanel = new ControlPanelWindow(_monitorBounds, _scale, _areas, _darkness);
         _controlPanel.AddAreaRequested += () => AddAreaRequested?.Invoke();
         _controlPanel.DarknessChanged += SetDarkness;
+        _controlPanel.DarknessColorChanged += SetDarknessColor;
+        _controlPanel.NightThemeChanged += SetNightTheme;
+        _controlPanel.ObfuscationChanged += SetObfuscation;
         _controlPanel.FollowMouseChanged += SetFollowMouse;
         _controlPanel.FollowShapeChanged += SetFollowShape;
         _controlPanel.FollowSizeChanged += SetFollowSize;
@@ -83,6 +106,19 @@ public partial class OverlayWindow : Window
             Interval = TimeSpan.FromMilliseconds(16)
         };
         _followTimer.Tick += (_, _) => BuildMask();
+
+        _taskManagerTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _taskManagerTimer.Tick += (_, _) => UpdateTaskManagerPauseState();
+        _taskManagerTimer.Start();
+
+        _obfuscationTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(250)
+        };
+        _obfuscationTimer.Tick += (_, _) => CaptureObfuscatedBackground();
 
         if (trackRelatedWindows && !string.IsNullOrWhiteSpace(relatedProcessName))
         {
@@ -120,9 +156,105 @@ public partial class OverlayWindow : Window
     private void SetDarkness(double darkness)
     {
         _darkness = darkness;
-        MaskPath.Fill = new SolidColorBrush(
-            System.Windows.Media.Color.FromArgb((byte)(darkness * 255), 0, 0, 0));
+        ApplyMaskStyle();
         PauseMask.Opacity = darkness;
+    }
+
+    private void SetDarknessColor(System.Windows.Media.Color color)
+    {
+        _darknessColor = color;
+        ApplyMaskStyle();
+    }
+
+    private void SetNightTheme(bool enabled)
+    {
+        _nightThemeActive = enabled;
+        if (enabled) WindowsThemeManager.EnableDuskTheme();
+        else WindowsThemeManager.RestorePreviousTheme();
+    }
+
+    private void SetObfuscation(bool enabled)
+    {
+        _obfuscateBackground = enabled;
+        _obfuscationTimer.Stop();
+        if (enabled)
+        {
+            // La captura se hace una sola vez. Ocultar/mostrar la capa en
+            // cada actualización provocaba parpadeo y movimiento visible.
+            CaptureObfuscatedBackground();
+        }
+        else
+        {
+            ObfuscationImage.Source = null;
+            ObfuscationImage.Visibility = Visibility.Collapsed;
+        }
+        ApplyMaskStyle();
+    }
+
+    private void ApplyMaskStyle()
+    {
+        MaskPath.Fill = _obfuscateBackground
+            ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(
+                (byte)Math.Clamp(_darkness * 35, 10, 45), 180, 195, 215))
+            : new SolidColorBrush(System.Windows.Media.Color.FromArgb(
+                (byte)(_darkness * 255), _darknessColor.R,
+                _darknessColor.G, _darknessColor.B));
+        MaskPath.Effect = null;
+        ObfuscationImage.Visibility = _obfuscateBackground && !_isPaused
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ObfuscationImage.Clip = _obfuscateBackground
+            ? MaskPath.Data?.Clone()
+            : null;
+    }
+
+    private async void CaptureObfuscatedBackground()
+    {
+        if (!_obfuscateBackground || _isPaused || !IsVisible) return;
+
+        var overlayWasVisible = IsVisible;
+        var panelWasVisible = _controlPanel.IsVisible;
+        Hide();
+        _controlPanel.Hide();
+
+        try
+        {
+            await Task.Delay(35);
+            using var bitmap = new Bitmap(_monitorBounds.Width,
+                _monitorBounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                graphics.CopyFromScreen(_monitorBounds.Left, _monitorBounds.Top,
+                    0, 0, bitmap.Size, CopyPixelOperation.SourceCopy);
+            }
+
+            var handle = bitmap.GetHbitmap();
+            try
+            {
+                var source = Imaging.CreateBitmapSourceFromHBitmap(handle,
+                    IntPtr.Zero, Int32Rect.Empty,
+                    BitmapSizeOptions.FromEmptyOptions());
+                source.Freeze();
+                ObfuscationImage.Source = source;
+                ObfuscationImage.Effect = new BlurEffect
+                {
+                    Radius = 18,
+                    KernelType = KernelType.Gaussian,
+                    RenderingBias = RenderingBias.Quality
+                };
+            }
+            finally
+            {
+                DeleteObject(handle);
+            }
+        }
+        catch (ExternalException) { }
+        finally
+        {
+            if (overlayWasVisible) Show();
+            if (panelWasVisible) _controlPanel.Show();
+            ApplyMaskStyle();
+        }
     }
 
     private void SetTextHighlightOptions(TextHighlightOptions options)
@@ -456,6 +588,18 @@ public partial class OverlayWindow : Window
         _isPaused = paused;
         if (paused)
         {
+            _obfuscationTimer.Stop();
+            ObfuscationImage.Visibility = Visibility.Collapsed;
+            if (_nightThemeActive)
+                WindowsThemeManager.RestorePreviousTheme();
+        }
+        else if (_nightThemeActive)
+        {
+            WindowsThemeManager.EnableDuskTheme();
+        }
+
+        if (paused)
+        {
             _followTimer.Stop();
             // Pausar quita completamente el sombreado, pero conserva visible
             // el panel lateral para poder pulsar Reanudar.
@@ -470,6 +614,135 @@ public partial class OverlayWindow : Window
         else
         {
             BuildMask();
+        }
+
+        UpdateColorInversion();
+        if (!paused && _obfuscateBackground)
+            ApplyMaskStyle();
+    }
+
+    private void UpdateWindowsColorFilter()
+    {
+        if (_colorInversionMode != ColorInversionMode.FullScreen)
+        {
+            RestoreWindowsColorFilter();
+            return;
+        }
+
+        try
+        {
+            const string colorFilteringPath = @"Software\Microsoft\ColorFiltering";
+            const string accessibilityPath =
+                @"Software\Microsoft\Windows NT\CurrentVersion\Accessibility";
+
+            using var colorFiltering = Registry.CurrentUser.CreateSubKey(
+                colorFilteringPath, writable: true);
+            if (colorFiltering is null) return;
+
+            if (!_windowsColorFilterChanged)
+            {
+                _previousFilterActive = colorFiltering.GetValue("Active");
+                _previousFilterType = colorFiltering.GetValue("FilterType");
+                using var accessibility = Registry.CurrentUser.OpenSubKey(
+                    accessibilityPath, writable: false);
+                _previousAccessibilityConfiguration = accessibility?.GetValue(
+                    "Configuration");
+                _windowsColorFilterChanged = true;
+            }
+
+            colorFiltering.SetValue("FilterType", 1, RegistryValueKind.DWord);
+            colorFiltering.SetValue("Active", _isPaused ? 0 : 1,
+                RegistryValueKind.DWord);
+
+            using var accessibilityWrite = Registry.CurrentUser.CreateSubKey(
+                accessibilityPath, writable: true);
+            accessibilityWrite?.SetValue("Configuration", "colorfiltering",
+                RegistryValueKind.String);
+            BroadcastColorFilterChange();
+        }
+        catch (System.Security.SecurityException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private void RestoreWindowsColorFilter()
+    {
+        if (!_windowsColorFilterChanged) return;
+
+        try
+        {
+            const string colorFilteringPath = @"Software\Microsoft\ColorFiltering";
+            const string accessibilityPath =
+                @"Software\Microsoft\Windows NT\CurrentVersion\Accessibility";
+
+            using (var colorFiltering = Registry.CurrentUser.CreateSubKey(
+                colorFilteringPath, writable: true))
+            {
+                RestoreRegistryValue(colorFiltering, "Active", _previousFilterActive);
+                RestoreRegistryValue(colorFiltering, "FilterType", _previousFilterType);
+            }
+
+            using (var accessibility = Registry.CurrentUser.CreateSubKey(
+                accessibilityPath, writable: true))
+            {
+                RestoreRegistryValue(accessibility, "Configuration",
+                    _previousAccessibilityConfiguration);
+            }
+
+            BroadcastColorFilterChange();
+        }
+        catch (System.Security.SecurityException) { }
+        catch (UnauthorizedAccessException) { }
+        finally
+        {
+            _windowsColorFilterChanged = false;
+            _previousFilterActive = null;
+            _previousFilterType = null;
+            _previousAccessibilityConfiguration = null;
+        }
+    }
+
+    private static void RestoreRegistryValue(RegistryKey? key, string name,
+        object? value)
+    {
+        if (key is null) return;
+        if (value is null) key.DeleteValue(name, throwOnMissingValue: false);
+        else key.SetValue(name, value);
+    }
+
+    private static void BroadcastColorFilterChange()
+    {
+        SendMessageTimeout(new IntPtr(0xffff), WmSettingChange, IntPtr.Zero,
+            "ColorFiltering", SendMessageTimeoutFlags, 2000, out _);
+    }
+
+    private void UpdateTaskManagerPauseState()
+    {
+        var taskManagerOpen = false;
+        try
+        {
+            taskManagerOpen = Process.GetProcessesByName("Taskmgr").Length > 0;
+        }
+        catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
+
+        if (taskManagerOpen && !_pausedByTaskManager)
+        {
+            _pausedByTaskManager = true;
+            _wasPausedBeforeTaskManager = _isPaused;
+            if (!_isPaused)
+            {
+                _controlPanel.SetPausedState(true);
+                SetPaused(true);
+            }
+        }
+        else if (!taskManagerOpen && _pausedByTaskManager)
+        {
+            _pausedByTaskManager = false;
+            if (!_wasPausedBeforeTaskManager)
+            {
+                _controlPanel.SetPausedState(false);
+                SetPaused(false);
+            }
         }
     }
 
@@ -598,8 +871,154 @@ public partial class OverlayWindow : Window
         }
 
         MaskPath.Data = new CombinedGeometry(GeometryCombineMode.Exclude, outer, innerGroup);
-        MaskPath.Fill = new SolidColorBrush(
-            System.Windows.Media.Color.FromArgb((byte)(_darkness * 255), 0, 0, 0));
+        ApplyMaskStyle();
+        UpdateColorInversion();
+    }
+
+    private void UpdateColorInversion()
+    {
+        if (_colorInversionMode == ColorInversionMode.FullScreen)
+        {
+            ClearInversionHosts();
+            UpdateWindowsColorFilter();
+            return;
+        }
+
+        RestoreWindowsColorFilter();
+
+        if (_isPaused || _colorInversionMode == ColorInversionMode.None)
+        {
+            ClearInversionHosts();
+            return;
+        }
+
+        var regions = GetCurrentFocusRegions();
+        var desired = new List<(System.Drawing.Rectangle Bounds, bool Invert)>();
+
+        if (_colorInversionMode == ColorInversionMode.FullScreen)
+        {
+            desired.Add((_monitorBounds, true));
+        }
+        else if (_colorInversionMode == ColorInversionMode.FocusedAreas)
+        {
+            desired.AddRange(regions.Select(region => (region, true)));
+        }
+        else
+        {
+            desired.Add((_monitorBounds, true));
+            desired.AddRange(regions.Select(region => (region, false)));
+        }
+
+        desired = desired
+            .Where(item => item.Bounds.Width > 1 && item.Bounds.Height > 1)
+            .ToList();
+
+        try
+        {
+            var excludedWindows = new[]
+            {
+                new WindowInteropHelper(this).Handle,
+                new WindowInteropHelper(_controlPanel).Handle
+            };
+
+            while (_inversionHosts.Count < desired.Count)
+            {
+                var item = desired[_inversionHosts.Count];
+                _inversionHosts.Add(new MagnifierWindow(
+                    item.Bounds, item.Invert, excludedWindows));
+            }
+
+            for (var index = 0; index < desired.Count; index++)
+            {
+                var item = desired[index];
+                if (_inversionHosts[index].Inverted != item.Invert)
+                {
+                    var replacement = new MagnifierWindow(
+                        item.Bounds, item.Invert, excludedWindows);
+                    _inversionHosts[index].Dispose();
+                    _inversionHosts[index] = replacement;
+                }
+                else
+                {
+                    _inversionHosts[index].Update(item.Bounds, item.Invert);
+                }
+            }
+
+            while (_inversionHosts.Count > desired.Count)
+            {
+                var lastIndex = _inversionHosts.Count - 1;
+                _inversionHosts[lastIndex].Dispose();
+                _inversionHosts.RemoveAt(lastIndex);
+            }
+
+            _controlPanel.BringToFrontWithoutFocus();
+        }
+        catch (DllNotFoundException)
+        {
+            ClearInversionHosts();
+        }
+        catch (InvalidOperationException)
+        {
+            ClearInversionHosts();
+        }
+    }
+
+    private List<System.Drawing.Rectangle> GetCurrentFocusRegions()
+    {
+        var regions = new List<System.Drawing.Rectangle>();
+
+        if (_trackedWindow != IntPtr.Zero &&
+            IsWindowVisible(_trackedWindow) && GetWindowRect(_trackedWindow, out var trackedRect))
+        {
+            AddMonitorIntersection(regions, new System.Drawing.Rectangle(
+                trackedRect.Left, trackedRect.Top,
+                trackedRect.Right - trackedRect.Left,
+                trackedRect.Bottom - trackedRect.Top));
+        }
+        else if (_followMouse && GetCursorPos(out var cursor) &&
+                 _monitorBounds.Contains(cursor.X, cursor.Y))
+        {
+            var size = Math.Min(_followSize, Math.Min(_monitorBounds.Width, _monitorBounds.Height));
+            var width = Math.Min(
+                _followShape == FocusShape.Rectangle ? size * 1.35 : size,
+                _monitorBounds.Width);
+            var height = Math.Min(size, _monitorBounds.Height);
+            var left = Math.Clamp(cursor.X - width / 2, _monitorBounds.Left,
+                _monitorBounds.Right - width);
+            var top = Math.Clamp(cursor.Y - height / 2, _monitorBounds.Top,
+                _monitorBounds.Bottom - height);
+            regions.Add(new System.Drawing.Rectangle(
+                (int)left, (int)top, (int)width, (int)height));
+        }
+        else
+        {
+            foreach (var area in _areas)
+                AddMonitorIntersection(regions, new System.Drawing.Rectangle(
+                    area.Bounds.X, area.Bounds.Y,
+                    area.Bounds.Width, area.Bounds.Height));
+        }
+
+        return regions
+            .GroupBy(region => new { region.X, region.Y, region.Width, region.Height })
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private void AddMonitorIntersection(List<System.Drawing.Rectangle> regions,
+        System.Drawing.Rectangle bounds)
+    {
+        var intersection = System.Drawing.Rectangle.Intersect(_monitorBounds, bounds);
+        if (intersection.Width > 1 && intersection.Height > 1)
+            regions.Add(intersection);
+    }
+
+    private void ClearInversionHosts()
+    {
+        foreach (var host in _inversionHosts)
+        {
+            host.Dispose();
+        }
+        _inversionHosts.Clear();
     }
 
     private void OverlayWindow_SourceInitialized(object? sender, EventArgs e)
@@ -630,6 +1049,12 @@ public partial class OverlayWindow : Window
     private void OverlayWindow_Closed(object? sender, EventArgs e)
     {
         _followTimer.Stop();
+        _taskManagerTimer.Stop();
+        _obfuscationTimer.Stop();
+        if (_nightThemeActive)
+            WindowsThemeManager.RestorePreviousTheme();
+        RestoreWindowsColorFilter();
+        ClearInversionHosts();
         _relatedTracker?.Dispose();
         _controlPanel.Close();
     }
@@ -637,6 +1062,8 @@ public partial class OverlayWindow : Window
     private static readonly IntPtr HwndTopmost = new(-1);
     private const uint SwpNoActivate = 0x0010;
     private const uint SwpShowWindow = 0x0040;
+    private const uint WmSettingChange = 0x001A;
+    private const uint SendMessageTimeoutFlags = 0x0000;
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
@@ -647,6 +1074,11 @@ public partial class OverlayWindow : Window
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
         int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg,
+        IntPtr wParam, string lParam, uint flags, uint timeout,
+        out IntPtr result);
 
     [DllImport("user32.dll")]
     private static extern bool IsWindow(IntPtr hWnd);
@@ -668,6 +1100,9 @@ public partial class OverlayWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr hObject);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT

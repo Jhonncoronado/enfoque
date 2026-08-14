@@ -16,9 +16,11 @@ public partial class MainWindow : Window
 {
     private const int WmHotKey = 0x0312;
     private const int HotkeyId = 9000;
+    private const int ExitHotkeyId = 9001;
     private const uint ModAlt = 0x0001;
     private const uint ModControl = 0x0002;
     private const uint VkF = 0x46;
+    private const uint VkX = 0x58;
     private const uint GwHwndPrev = 3;
 
     private OverlayWindow? _overlay;
@@ -71,6 +73,9 @@ public partial class MainWindow : Window
         _source = (HwndSource)PresentationSource.FromVisual(this)!;
         _source.AddHook(WndProc);
         RegisterHotKey(_source.Handle, HotkeyId, ModControl | ModAlt, VkF);
+        // Windows normalmente no expone Fn como una tecla independiente;
+        // Ctrl+Fn+X llega como Ctrl+X al proceso.
+        RegisterHotKey(_source.Handle, ExitHotkeyId, ModControl, VkX);
     }
 
     private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -278,12 +283,18 @@ public partial class MainWindow : Window
             else StopFocus();
             handled = true;
         }
+        else if (msg == WmHotKey && wParam.ToInt32() == ExitHotkeyId)
+        {
+            Close();
+            handled = true;
+        }
         return IntPtr.Zero;
     }
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
         if (_source is not null) UnregisterHotKey(_source.Handle, HotkeyId);
+        if (_source is not null) UnregisterHotKey(_source.Handle, ExitHotkeyId);
         _overlay?.Close();
         _selectionWindow?.Close();
     }

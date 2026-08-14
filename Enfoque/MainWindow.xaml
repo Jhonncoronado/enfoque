@@ -39,7 +39,7 @@
             <CheckBox x:Name="CaptureAnyPopupCheckBox" Margin="0,7,0,0"
                       Content="Capturar popups aunque sean de otro proceso"
                       Foreground="#5B6472" IsChecked="True" />
-            <TextBlock Margin="0,20,0,0" Text="Atajo global: Ctrl + Alt + F para activar o desactivar"
+            <TextBlock Margin="0,20,0,0" Text="Atajos globales: Ctrl + Alt + F activa/desactiva · Ctrl + Fn + X cierra la aplicación"
                        Foreground="#5B6472" FontSize="13" />
         </StackPanel>
 

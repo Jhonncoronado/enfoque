@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using System.Windows.Interop;
+using Forms = System.Windows.Forms;
 
 namespace Enfoque;
 
@@ -16,10 +18,14 @@ public partial class ControlPanelWindow : Window
     private bool _expanded;
     private bool _isPaused;
     private double _topPixels;
+    private System.Windows.Media.Color _darknessColor = System.Windows.Media.Colors.Black;
     private readonly DispatcherTimer _edgeTimer;
 
     public event Action? AddAreaRequested;
     public event Action<double>? DarknessChanged;
+    public event Action<System.Windows.Media.Color>? DarknessColorChanged;
+    public event Action<bool>? NightThemeChanged;
+    public event Action<bool>? ObfuscationChanged;
     public event Action<bool>? FollowMouseChanged;
     public event Action<FocusShape>? FollowShapeChanged;
     public event Action<double>? FollowSizeChanged;
@@ -58,22 +64,41 @@ public partial class ControlPanelWindow : Window
             .ToList();
     }
 
+    public void BringToFrontWithoutFocus()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        SetWindowPos(handle, HwndTopmost, 0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate | SwpShowWindow);
+    }
+
+    public void SetPausedState(bool paused)
+    {
+        _isPaused = paused;
+        PauseButton.Content = paused ? "▶" : "⏸";
+        PauseButton.ToolTip = paused ? "Reanudar" : "Pausar";
+    }
+
     private void ToggleButton_Click(object sender, RoutedEventArgs e)
     {
         _expanded = !_expanded;
         Width = _expanded ? 388 : 48;
-        Height = _expanded ? 700 : 52;
+        Height = _expanded ? _monitorBounds.Height / _scale : 52;
         SettingsPanel.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
         ToggleButton.Content = _expanded ? "×" : "☰";
         ToggleButton.ToolTip = _expanded ? "Cerrar opciones" : "Abrir opciones";
+        if (_expanded)
+            _topPixels = _monitorBounds.Top;
+        else
+            _topPixels = _monitorBounds.Top +
+                (_monitorBounds.Height - 52 * _scale) / 2;
         PositionWindow();
     }
 
     private void PauseButton_Click(object sender, RoutedEventArgs e)
     {
-        _isPaused = !_isPaused;
-        PauseButton.Content = _isPaused ? "▶" : "⏸";
-        PauseButton.ToolTip = _isPaused ? "Reanudar" : "Pausar";
+        SetPausedState(!_isPaused);
         PauseChanged?.Invoke(_isPaused);
     }
 
@@ -136,6 +161,31 @@ public partial class ControlPanelWindow : Window
             DarknessLabel.Text = $"{Math.Round(e.NewValue * 100)}%";
         DarknessChanged?.Invoke(e.NewValue);
     }
+
+    private void DarknessColorButton_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new Forms.ColorDialog
+        {
+            Color = System.Drawing.Color.FromArgb(
+                _darknessColor.R, _darknessColor.G, _darknessColor.B),
+            FullOpen = true,
+            AnyColor = true
+        };
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK) return;
+
+        _darknessColor = System.Windows.Media.Color.FromRgb(
+            dialog.Color.R, dialog.Color.G, dialog.Color.B);
+        DarknessColorButton.Background = new System.Windows.Media.SolidColorBrush(
+            _darknessColor);
+        DarknessColorChanged?.Invoke(_darknessColor);
+    }
+
+    private void NightThemeCheckBox_Changed(object sender, RoutedEventArgs e)
+        => NightThemeChanged?.Invoke(NightThemeCheckBox.IsChecked == true);
+
+    private void ObfuscateCheckBox_Changed(object sender, RoutedEventArgs e)
+        => ObfuscationChanged?.Invoke(ObfuscateCheckBox.IsChecked == true);
 
     private void AddAreaButton_Click(object sender, RoutedEventArgs e)
         => AddAreaRequested?.Invoke();
@@ -213,6 +263,16 @@ public partial class ControlPanelWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);
+
+    private static readonly IntPtr HwndTopmost = new(-1);
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpShowWindow = 0x0040;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
+        int x, int y, int width, int height, uint flags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT

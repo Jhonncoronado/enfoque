@@ -5,6 +5,8 @@
         ShowInTaskbar="False" ShowActivated="False" Topmost="True"
         ResizeMode="NoResize">
     <Canvas x:Name="MaskCanvas" Background="Transparent">
+        <Image x:Name="ObfuscationImage" Stretch="Fill"
+               Visibility="Collapsed" IsHitTestVisible="False" />
         <Path x:Name="MaskPath" />
         <Rectangle x:Name="PauseMask" Fill="Black" Visibility="Collapsed"
                    IsHitTestVisible="False" />

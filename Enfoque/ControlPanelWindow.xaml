@@ -42,6 +42,29 @@
                             ValueChanged="DarknessSlider_ValueChanged" />
                     <TextBlock x:Name="DarknessLabel" Text="55%" HorizontalAlignment="Right"
                                Foreground="#64748B" />
+                    <Button x:Name="DarknessColorButton" Content="Color del oscurecimiento"
+                            Margin="0,8,0,0" Padding="8,6"
+                            Click="DarknessColorButton_Click" />
+
+                    <CheckBox x:Name="NightThemeCheckBox" Margin="0,14,0,0"
+                              Content="Invertir colores (tema Anochecer)"
+                              Foreground="#374151"
+                              Checked="NightThemeCheckBox_Changed"
+                              Unchecked="NightThemeCheckBox_Changed" />
+                    <CheckBox x:Name="ObfuscateCheckBox" Margin="0,8,0,0"
+                              Content="Ofuscar fondo en vez de oscurecerlo"
+                              Foreground="#374151"
+                              Checked="ObfuscateCheckBox_Changed"
+                              Unchecked="ObfuscateCheckBox_Changed" />
+                    <!--
+                               Foreground="#374151" />
+                    <ComboBox x:Name="ColorInversionComboBox" Height="28"
+                              SelectionChanged="ColorInversionComboBox_SelectionChanged">
+                        <ComboBoxItem Tag="None">Sin inversión</ComboBoxItem>
+                        <ComboBoxItem Tag="FullScreen">Pantalla completa (Windows)</ComboBoxItem>
+                        <ComboBoxItem Tag="FocusedAreas">Solo áreas seleccionadas</ComboBoxItem>
+                        <ComboBoxItem Tag="OutsideFocusedAreas">Fuera de las áreas seleccionadas</ComboBoxItem>
+                    </ComboBox>-->
 
                     <Separator Margin="0,12,0,4" />
                     <CheckBox x:Name="FollowMouseCheckBox" Content="Seguir el mouse"
