@@ -24,6 +24,10 @@ páginas web o ventanas pueden no ofrecer esa información.
 
 ![Icono de Enfoque](docs/screenshots/icono-enfoque.png)
 
+### Video demostrativo
+
+[Ver o descargar el video demostrativo](docs/demo/demo-enfoque.webm)
+
 El instalador de Windows se encuentra en `artifacts/installer/Enfoque-Setup-1.2.3.exe`.
 
 ## Requisitos
