@@ -11,6 +11,7 @@ AppPublisher=Jhonn Coronado
 AppPublisherURL=https://github.com/Jhonncoronado/enfoque
 AppSupportURL=https://github.com/Jhonncoronado/enfoque/issues
 AppUpdatesURL=https://github.com/Jhonncoronado/enfoque/releases
+SetupIconFile=..\Enfoque\vectorink.ico
 DefaultDirName={autopf}\Enfoque
 DefaultGroupName=Enfoque
 DisableProgramGroupPage=yes

@@ -18,6 +18,14 @@ La búsqueda de texto se ejecuta únicamente al pulsar el botón. Usa Windows UI
 Automation cuando la aplicación visible expone sus rangos de texto; algunas
 páginas web o ventanas pueden no ofrecer esa información.
 
+## Capturas y descarga
+
+![Ventana principal](docs/screenshots/ventana-principal.png)
+
+![Icono de Enfoque](docs/screenshots/icono-enfoque.png)
+
+El instalador de Windows se encuentra en `artifacts/installer/Enfoque-Setup-1.2.3.exe`.
+
 ## Requisitos
 
 - Windows 10 o superior.
