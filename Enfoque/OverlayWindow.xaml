@@ -7,6 +7,10 @@
     <Canvas x:Name="MaskCanvas" Background="Transparent">
         <Image x:Name="ObfuscationImage" Stretch="Fill"
                Visibility="Collapsed" IsHitTestVisible="False" />
+        <MediaElement x:Name="ObfuscationVideo" Stretch="Fill"
+                      LoadedBehavior="Manual" UnloadedBehavior="Stop"
+                      Visibility="Collapsed" IsHitTestVisible="False"
+                      MediaEnded="ObfuscationVideo_MediaEnded" />
         <Path x:Name="MaskPath" />
         <Rectangle x:Name="PauseMask" Fill="Black" Visibility="Collapsed"
                    IsHitTestVisible="False" />

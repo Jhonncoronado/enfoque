@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace Enfoque;
 
@@ -26,6 +27,7 @@ public partial class ControlPanelWindow : Window
     public event Action<System.Windows.Media.Color>? DarknessColorChanged;
     public event Action<bool>? NightThemeChanged;
     public event Action<bool>? ObfuscationChanged;
+    public event Action<string, bool>? ObfuscationMediaSelected;
     public event Action<bool>? FollowMouseChanged;
     public event Action<FocusShape>? FollowShapeChanged;
     public event Action<double>? FollowSizeChanged;
@@ -78,6 +80,11 @@ public partial class ControlPanelWindow : Window
         _isPaused = paused;
         PauseButton.Content = paused ? "▶" : "⏸";
         PauseButton.ToolTip = paused ? "Reanudar" : "Pausar";
+    }
+
+    public void SetObfuscationState(bool enabled)
+    {
+        ObfuscateCheckBox.IsChecked = enabled;
     }
 
     private void ToggleButton_Click(object sender, RoutedEventArgs e)
@@ -186,6 +193,37 @@ public partial class ControlPanelWindow : Window
 
     private void ObfuscateCheckBox_Changed(object sender, RoutedEventArgs e)
         => ObfuscationChanged?.Invoke(ObfuscateCheckBox.IsChecked == true);
+
+    private void LoadImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Seleccionar imagen para ofuscar",
+            Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp;*.gif|Todos los archivos|*.*",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        SetObfuscationState(true);
+        ObfuscationMediaSelected?.Invoke(dialog.FileName, false);
+    }
+
+    private void LoadVideoButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Seleccionar video para ofuscar",
+            Filter = "Videos|*.mp4;*.webm;*.wmv;*.avi;*.mov|Todos los archivos|*.*",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        SetObfuscationState(true);
+        ObfuscationMediaSelected?.Invoke(dialog.FileName, true);
+    }
+
+    private void UseScreenshotButton_Click(object sender, RoutedEventArgs e)
+        => ObfuscationMediaSelected?.Invoke(string.Empty, false);
 
     private void AddAreaButton_Click(object sender, RoutedEventArgs e)
         => AddAreaRequested?.Invoke();

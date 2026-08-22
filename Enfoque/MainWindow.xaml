@@ -1,7 +1,8 @@
 <Window x:Class="Enfoque.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Enfoque" Height="430" Width="520"
+        Title="Enfoque" Height="640" Width="580"
+        MinHeight="600" MinWidth="540"
         WindowStartupLocation="CenterScreen"
         Background="#F4F6F8">
     <Grid Margin="28">
@@ -18,7 +19,7 @@
 
         <StackPanel Grid.Row="2">
             <TextBlock Text="Nivel de oscuridad" FontWeight="SemiBold" Foreground="#273142" />
-            <Slider x:Name="OpacitySlider" Margin="0,10,0,4" Minimum="0.15" Maximum="0.90" Value="0.55"
+            <Slider x:Name="OpacitySlider" Margin="0,10,0,4" Minimum="0.15" Maximum="0.90" Value="0.70"
                     TickFrequency="0.05" IsSnapToTickEnabled="True" />
             <Grid>
                 <TextBlock Text="15%" Foreground="#687386" />
@@ -39,8 +40,34 @@
             <CheckBox x:Name="CaptureAnyPopupCheckBox" Margin="0,7,0,0"
                       Content="Capturar popups aunque sean de otro proceso"
                       Foreground="#5B6472" IsChecked="True" />
-            <TextBlock Margin="0,20,0,0" Text="Atajos globales: Ctrl + Alt + F activa/desactiva · Ctrl + Fn + X cierra la aplicación"
-                       Foreground="#5B6472" FontSize="13" />
+            <Separator Margin="0,22,0,12" />
+            <TextBlock Text="Atajos globales" FontWeight="SemiBold" Foreground="#273142" />
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="180" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Activar / desactivar enfoque" VerticalAlignment="Center"
+                           Foreground="#5B6472" />
+                <TextBox x:Name="ActivateHotkeyTextBox" Grid.Column="1" Text="Ctrl + Alt + F"
+                         IsReadOnly="True" ToolTip="Haga clic y presione la combinación deseada"
+                         PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
+                         GotKeyboardFocus="HotkeyTextBox_GotKeyboardFocus" />
+            </Grid>
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="180" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Cerrar aplicación" VerticalAlignment="Center"
+                           Foreground="#5B6472" />
+                <TextBox x:Name="ExitHotkeyTextBox" Grid.Column="1" Text="Ctrl + X"
+                         IsReadOnly="True" ToolTip="Haga clic y presione la combinación deseada"
+                         PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
+                         GotKeyboardFocus="HotkeyTextBox_GotKeyboardFocus" />
+            </Grid>
+            <TextBlock Margin="0,8,0,0" Text="Haga clic en un campo y presione Ctrl, Alt, Shift o Windows junto con una tecla."
+                       Foreground="#687386" FontSize="12" TextWrapping="Wrap" />
         </StackPanel>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">

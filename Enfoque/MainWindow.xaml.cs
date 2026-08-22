@@ -3,8 +3,10 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows.Media;
 using Forms = System.Windows.Forms;
+using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace Enfoque;
 
@@ -19,6 +21,8 @@ public partial class MainWindow : Window
     private const int ExitHotkeyId = 9001;
     private const uint ModAlt = 0x0001;
     private const uint ModControl = 0x0002;
+    private const uint ModShift = 0x0004;
+    private const uint ModWindows = 0x0008;
     private const uint VkF = 0x46;
     private const uint VkX = 0x58;
     private const uint GwHwndPrev = 3;
@@ -28,6 +32,10 @@ public partial class MainWindow : Window
     private HwndSource? _source;
     private readonly List<MonitorOption> _monitors = [];
     private IntPtr _lastTargetWindow = IntPtr.Zero;
+    private uint _activateModifiers = ModControl | ModAlt;
+    private uint _activateVirtualKey = VkF;
+    private uint _exitModifiers = ModControl;
+    private uint _exitVirtualKey = VkX;
 
     public MainWindow()
     {
@@ -72,10 +80,7 @@ public partial class MainWindow : Window
     {
         _source = (HwndSource)PresentationSource.FromVisual(this)!;
         _source.AddHook(WndProc);
-        RegisterHotKey(_source.Handle, HotkeyId, ModControl | ModAlt, VkF);
-        // Windows normalmente no expone Fn como una tecla independiente;
-        // Ctrl+Fn+X llega como Ctrl+X al proceso.
-        RegisterHotKey(_source.Handle, ExitHotkeyId, ModControl, VkX);
+        RegisterConfiguredHotkeys();
     }
 
     private void StartButton_Click(object sender, RoutedEventArgs e)
@@ -297,6 +302,120 @@ public partial class MainWindow : Window
         if (_source is not null) UnregisterHotKey(_source.Handle, ExitHotkeyId);
         _overlay?.Close();
         _selectionWindow?.Close();
+    }
+
+    private void HotkeyTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is WpfTextBox textBox)
+            textBox.SelectAll();
+    }
+
+    private void HotkeyTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (sender is not WpfTextBox textBox) return;
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or
+            Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        var modifiers = ToHotkeyModifiers(Keyboard.Modifiers);
+        if (modifiers == 0)
+        {
+            System.Windows.MessageBox.Show("El atajo debe incluir Ctrl, Alt, Shift o Windows.",
+                "Atajo no válido", MessageBoxButton.OK, MessageBoxImage.Information);
+            e.Handled = true;
+            return;
+        }
+
+        var virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
+        if (virtualKey == 0)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        var oldActivateModifiers = _activateModifiers;
+        var oldActivateVirtualKey = _activateVirtualKey;
+        var oldExitModifiers = _exitModifiers;
+        var oldExitVirtualKey = _exitVirtualKey;
+        var isExit = ReferenceEquals(textBox, ExitHotkeyTextBox);
+
+        UnregisterConfiguredHotkeys();
+        if (isExit)
+        {
+            _exitModifiers = modifiers;
+            _exitVirtualKey = virtualKey;
+        }
+        else
+        {
+            _activateModifiers = modifiers;
+            _activateVirtualKey = virtualKey;
+        }
+
+        if (!RegisterConfiguredHotkeys())
+        {
+            _activateModifiers = oldActivateModifiers;
+            _activateVirtualKey = oldActivateVirtualKey;
+            _exitModifiers = oldExitModifiers;
+            _exitVirtualKey = oldExitVirtualKey;
+            RegisterConfiguredHotkeys();
+            System.Windows.MessageBox.Show("No se pudo registrar ese atajo. Puede estar siendo usado por Windows u otra aplicación.",
+                "Atajo no disponible", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        else
+        {
+            textBox.Text = FormatHotkey(modifiers, virtualKey);
+        }
+
+        textBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        e.Handled = true;
+    }
+
+    private bool RegisterConfiguredHotkeys()
+    {
+        if (_source is null) return false;
+
+        var activateRegistered = RegisterHotKey(_source.Handle, HotkeyId,
+            _activateModifiers, _activateVirtualKey);
+        var exitRegistered = RegisterHotKey(_source.Handle, ExitHotkeyId,
+            _exitModifiers, _exitVirtualKey);
+        if (activateRegistered && exitRegistered) return true;
+
+        if (activateRegistered) UnregisterHotKey(_source.Handle, HotkeyId);
+        if (exitRegistered) UnregisterHotKey(_source.Handle, ExitHotkeyId);
+        return false;
+    }
+
+    private void UnregisterConfiguredHotkeys()
+    {
+        if (_source is null) return;
+        UnregisterHotKey(_source.Handle, HotkeyId);
+        UnregisterHotKey(_source.Handle, ExitHotkeyId);
+    }
+
+    private static uint ToHotkeyModifiers(ModifierKeys modifiers)
+    {
+        var result = 0u;
+        if (modifiers.HasFlag(ModifierKeys.Control)) result |= ModControl;
+        if (modifiers.HasFlag(ModifierKeys.Alt)) result |= ModAlt;
+        if (modifiers.HasFlag(ModifierKeys.Shift)) result |= ModShift;
+        if (modifiers.HasFlag(ModifierKeys.Windows)) result |= ModWindows;
+        return result;
+    }
+
+    private static string FormatHotkey(uint modifiers, uint virtualKey)
+    {
+        var parts = new List<string>();
+        if ((modifiers & ModControl) != 0) parts.Add("Ctrl");
+        if ((modifiers & ModAlt) != 0) parts.Add("Alt");
+        if ((modifiers & ModShift) != 0) parts.Add("Shift");
+        if ((modifiers & ModWindows) != 0) parts.Add("Windows");
+        parts.Add(KeyInterop.KeyFromVirtualKey((int)virtualKey).ToString());
+        return string.Join(" + ", parts);
     }
 
     private static IntPtr GetPreviousWindow(IntPtr ownHandle)

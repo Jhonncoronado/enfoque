@@ -8,8 +8,8 @@
     <Grid>
         <Button x:Name="ToggleButton" Content="☰" Width="48" Height="52"
                 HorizontalAlignment="Left" VerticalAlignment="Top"
-                FontSize="22" Foreground="White" Background="#DC1F2937"
-                BorderThickness="0" ToolTip="Abrir opciones" Click="ToggleButton_Click" />
+                FontSize="22" FontWeight="Bold" Foreground="White" Background="#F97316"
+                BorderBrush="#FDBA74" BorderThickness="1" ToolTip="Abrir opciones" Click="ToggleButton_Click" />
 
         <Border x:Name="QuickBar" Visibility="Collapsed" Margin="48,0,0,0"
                 Background="#EC1F2937" CornerRadius="0,6,6,0" Padding="4">
@@ -18,7 +18,7 @@
                         FontSize="18" Foreground="White" Background="Transparent"
                         BorderThickness="0" ToolTip="Pausar" Click="PauseButton_Click" />
                 <Button x:Name="StopButton" Content="■" Width="42" Height="42"
-                        FontSize="16" Foreground="#FCA5A5" Background="Transparent"
+                        FontSize="16" Foreground="#EF4444" Background="Transparent"
                         BorderThickness="0" ToolTip="Detener enfoque" Click="StopButton_Click" />
                 <Border x:Name="DragHandle" Width="28" Height="42" Cursor="SizeNS"
                         Background="#334B5563" ToolTip="Arrastrar hacia arriba o abajo"
@@ -37,7 +37,7 @@
                     <TextBlock Text="Opciones de enfoque" FontSize="17" FontWeight="SemiBold"
                                Foreground="#1F2937" />
                     <TextBlock Text="Oscurecimiento" Margin="0,16,0,4" Foreground="#374151" />
-                    <Slider x:Name="DarknessSlider" Minimum="0.15" Maximum="0.90" Value="0.55"
+                    <Slider x:Name="DarknessSlider" Minimum="0.15" Maximum="0.90" Value="0.70"
                             TickFrequency="0.05" IsSnapToTickEnabled="True"
                             ValueChanged="DarknessSlider_ValueChanged" />
                     <TextBlock x:Name="DarknessLabel" Text="55%" HorizontalAlignment="Right"
@@ -56,6 +56,14 @@
                               Foreground="#374151"
                               Checked="ObfuscateCheckBox_Changed"
                               Unchecked="ObfuscateCheckBox_Changed" />
+                    <StackPanel Margin="18,6,0,0">
+                        <Button Content="Cargar imagen de galería..." Padding="8,6"
+                                Click="LoadImageButton_Click" />
+                        <Button Content="Cargar video en bucle..." Margin="0,6,0,0" Padding="8,6"
+                                Click="LoadVideoButton_Click" />
+                        <Button Content="Usar captura de pantalla" Margin="0,6,0,0" Padding="8,6"
+                                Click="UseScreenshotButton_Click" />
+                    </StackPanel>
                     <!--
                                Foreground="#374151" />
                     <ComboBox x:Name="ColorInversionComboBox" Height="28"

@@ -54,6 +54,8 @@ public partial class OverlayWindow : Window
     private object? _previousFilterType;
     private object? _previousAccessibilityConfiguration;
     private bool _obfuscateBackground;
+    private string? _obfuscationMediaPath;
+    private bool _obfuscationMediaIsVideo;
     private bool _nightThemeActive;
     private System.Windows.Media.Color _darknessColor =
         System.Windows.Media.Colors.Black;
@@ -83,6 +85,10 @@ public partial class OverlayWindow : Window
         Height = monitorBounds.Height / scale;
         PauseMask.Width = Width;
         PauseMask.Height = Height;
+        ObfuscationImage.Width = Width;
+        ObfuscationImage.Height = Height;
+        ObfuscationVideo.Width = Width;
+        ObfuscationVideo.Height = Height;
 
         _controlPanel = new ControlPanelWindow(_monitorBounds, _scale, _areas, _darkness);
         _controlPanel.AddAreaRequested += () => AddAreaRequested?.Invoke();
@@ -90,6 +96,7 @@ public partial class OverlayWindow : Window
         _controlPanel.DarknessColorChanged += SetDarknessColor;
         _controlPanel.NightThemeChanged += SetNightTheme;
         _controlPanel.ObfuscationChanged += SetObfuscation;
+        _controlPanel.ObfuscationMediaSelected += SetObfuscationMedia;
         _controlPanel.FollowMouseChanged += SetFollowMouse;
         _controlPanel.FollowShapeChanged += SetFollowShape;
         _controlPanel.FollowSizeChanged += SetFollowSize;
@@ -177,7 +184,7 @@ public partial class OverlayWindow : Window
     {
         _obfuscateBackground = enabled;
         _obfuscationTimer.Stop();
-        if (enabled)
+        if (enabled && string.IsNullOrWhiteSpace(_obfuscationMediaPath))
         {
             // La captura se hace una sola vez. Ocultar/mostrar la capa en
             // cada actualización provocaba parpadeo y movimiento visible.
@@ -185,10 +192,67 @@ public partial class OverlayWindow : Window
         }
         else
         {
-            ObfuscationImage.Source = null;
-            ObfuscationImage.Visibility = Visibility.Collapsed;
+            if (!enabled)
+            {
+                ObfuscationImage.Visibility = Visibility.Collapsed;
+                ObfuscationVideo.Visibility = Visibility.Collapsed;
+                ObfuscationVideo.Stop();
+            }
         }
         ApplyMaskStyle();
+    }
+
+    private void SetObfuscationMedia(string path, bool isVideo)
+    {
+        _obfuscationMediaPath = string.IsNullOrWhiteSpace(path) ? null : path;
+        _obfuscationMediaIsVideo = isVideo && _obfuscationMediaPath is not null;
+
+        _obfuscationTimer.Stop();
+        ObfuscationImage.Source = null;
+        ObfuscationVideo.Stop();
+        ObfuscationVideo.Source = null;
+
+        if (_obfuscationMediaPath is null)
+        {
+            if (_obfuscateBackground) CaptureObfuscatedBackground();
+            ApplyMaskStyle();
+            return;
+        }
+
+        try
+        {
+            if (_obfuscationMediaIsVideo)
+            {
+                ObfuscationVideo.Source = new Uri(_obfuscationMediaPath,
+                    UriKind.Absolute);
+                ObfuscationVideo.Position = TimeSpan.Zero;
+                ObfuscationVideo.Play();
+            }
+            else
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.UriSource = new Uri(_obfuscationMediaPath, UriKind.Absolute);
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.EndInit();
+                image.Freeze();
+                ObfuscationImage.Source = image;
+            }
+        }
+        catch (Exception)
+        {
+            _obfuscationMediaPath = null;
+            _obfuscationMediaIsVideo = false;
+        }
+
+        ApplyMaskStyle();
+    }
+
+    private void ObfuscationVideo_MediaEnded(object sender, RoutedEventArgs e)
+    {
+        if (!_obfuscationMediaIsVideo || !_obfuscateBackground || _isPaused) return;
+        ObfuscationVideo.Position = TimeSpan.Zero;
+        ObfuscationVideo.Play();
     }
 
     private void ApplyMaskStyle()
@@ -200,17 +264,24 @@ public partial class OverlayWindow : Window
                 (byte)(_darkness * 255), _darknessColor.R,
                 _darknessColor.G, _darknessColor.B));
         MaskPath.Effect = null;
-        ObfuscationImage.Visibility = _obfuscateBackground && !_isPaused
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        ObfuscationImage.Visibility = _obfuscateBackground && !_isPaused &&
+            !_obfuscationMediaIsVideo && ObfuscationImage.Source is not null
+            ? Visibility.Visible : Visibility.Collapsed;
+        ObfuscationVideo.Visibility = _obfuscateBackground && !_isPaused &&
+            _obfuscationMediaIsVideo && ObfuscationVideo.Source is not null
+            ? Visibility.Visible : Visibility.Collapsed;
         ObfuscationImage.Clip = _obfuscateBackground
+            ? MaskPath.Data?.Clone()
+            : null;
+        ObfuscationVideo.Clip = _obfuscateBackground
             ? MaskPath.Data?.Clone()
             : null;
     }
 
     private async void CaptureObfuscatedBackground()
     {
-        if (!_obfuscateBackground || _isPaused || !IsVisible) return;
+        if (!_obfuscateBackground || _isPaused || !IsVisible ||
+            !string.IsNullOrWhiteSpace(_obfuscationMediaPath)) return;
 
         var overlayWasVisible = IsVisible;
         var panelWasVisible = _controlPanel.IsVisible;
@@ -235,7 +306,7 @@ public partial class OverlayWindow : Window
                     IntPtr.Zero, Int32Rect.Empty,
                     BitmapSizeOptions.FromEmptyOptions());
                 source.Freeze();
-                ObfuscationImage.Source = source;
+            ObfuscationImage.Source = source;
                 ObfuscationImage.Effect = new BlurEffect
                 {
                     Radius = 18,
@@ -590,6 +661,7 @@ public partial class OverlayWindow : Window
         {
             _obfuscationTimer.Stop();
             ObfuscationImage.Visibility = Visibility.Collapsed;
+            ObfuscationVideo.Stop();
             if (_nightThemeActive)
                 WindowsThemeManager.RestorePreviousTheme();
         }
@@ -597,6 +669,10 @@ public partial class OverlayWindow : Window
         {
             WindowsThemeManager.EnableDuskTheme();
         }
+
+        if (!paused && _obfuscationMediaIsVideo &&
+            ObfuscationVideo.Source is not null)
+            ObfuscationVideo.Play();
 
         if (paused)
         {
