@@ -28,6 +28,7 @@ public partial class ControlPanelWindow : Window
     public event Action<bool>? NightThemeChanged;
     public event Action<bool>? ObfuscationChanged;
     public event Action<string, bool>? ObfuscationMediaSelected;
+    public event Action<bool>? PlainMediaChanged;
     public event Action<bool>? FollowMouseChanged;
     public event Action<FocusShape>? FollowShapeChanged;
     public event Action<double>? FollowSizeChanged;
@@ -85,6 +86,19 @@ public partial class ControlPanelWindow : Window
     public void SetObfuscationState(bool enabled)
     {
         ObfuscateCheckBox.IsChecked = enabled;
+    }
+
+    public void SetObfuscationMediaLoadedState(bool loaded)
+    {
+        PlainMediaCheckBox.IsEnabled = loaded;
+        if (!loaded) PlainMediaCheckBox.IsChecked = false;
+    }
+
+    public void SetMediaSelectionEnabled(bool enabled)
+    {
+        LoadImageButton.IsEnabled = enabled;
+        LoadVideoButton.IsEnabled = enabled;
+        if (!enabled) SetObfuscationMediaLoadedState(false);
     }
 
     private void ToggleButton_Click(object sender, RoutedEventArgs e)
@@ -204,7 +218,6 @@ public partial class ControlPanelWindow : Window
         };
         if (dialog.ShowDialog() != true) return;
 
-        SetObfuscationState(true);
         ObfuscationMediaSelected?.Invoke(dialog.FileName, false);
     }
 
@@ -218,12 +231,11 @@ public partial class ControlPanelWindow : Window
         };
         if (dialog.ShowDialog() != true) return;
 
-        SetObfuscationState(true);
         ObfuscationMediaSelected?.Invoke(dialog.FileName, true);
     }
 
-    private void UseScreenshotButton_Click(object sender, RoutedEventArgs e)
-        => ObfuscationMediaSelected?.Invoke(string.Empty, false);
+    private void PlainMediaCheckBox_Changed(object sender, RoutedEventArgs e)
+        => PlainMediaChanged?.Invoke(PlainMediaCheckBox.IsChecked == true);
 
     private void AddAreaButton_Click(object sender, RoutedEventArgs e)
         => AddAreaRequested?.Invoke();

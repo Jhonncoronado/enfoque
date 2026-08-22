@@ -56,6 +56,7 @@ public partial class OverlayWindow : Window
     private bool _obfuscateBackground;
     private string? _obfuscationMediaPath;
     private bool _obfuscationMediaIsVideo;
+    private bool _showMediaPlain;
     private bool _nightThemeActive;
     private System.Windows.Media.Color _darknessColor =
         System.Windows.Media.Colors.Black;
@@ -97,6 +98,7 @@ public partial class OverlayWindow : Window
         _controlPanel.NightThemeChanged += SetNightTheme;
         _controlPanel.ObfuscationChanged += SetObfuscation;
         _controlPanel.ObfuscationMediaSelected += SetObfuscationMedia;
+        _controlPanel.PlainMediaChanged += SetMediaPlainMode;
         _controlPanel.FollowMouseChanged += SetFollowMouse;
         _controlPanel.FollowShapeChanged += SetFollowShape;
         _controlPanel.FollowSizeChanged += SetFollowSize;
@@ -184,20 +186,22 @@ public partial class OverlayWindow : Window
     {
         _obfuscateBackground = enabled;
         _obfuscationTimer.Stop();
+        if (!enabled)
+        {
+            _obfuscationMediaPath = null;
+            _obfuscationMediaIsVideo = false;
+            _showMediaPlain = false;
+            ObfuscationImage.Source = null;
+            ObfuscationImage.Effect = null;
+            ObfuscationVideo.Stop();
+            ObfuscationVideo.Source = null;
+            _controlPanel.SetObfuscationMediaLoadedState(false);
+        }
+        _controlPanel.SetMediaSelectionEnabled(enabled);
         if (enabled && string.IsNullOrWhiteSpace(_obfuscationMediaPath))
         {
-            // La captura se hace una sola vez. Ocultar/mostrar la capa en
-            // cada actualización provocaba parpadeo y movimiento visible.
+            // La captura se hace una sola vez para que no haya parpadeo ni movimiento.
             CaptureObfuscatedBackground();
-        }
-        else
-        {
-            if (!enabled)
-            {
-                ObfuscationImage.Visibility = Visibility.Collapsed;
-                ObfuscationVideo.Visibility = Visibility.Collapsed;
-                ObfuscationVideo.Stop();
-            }
         }
         ApplyMaskStyle();
     }
@@ -209,11 +213,14 @@ public partial class OverlayWindow : Window
 
         _obfuscationTimer.Stop();
         ObfuscationImage.Source = null;
+        ObfuscationImage.Effect = null;
         ObfuscationVideo.Stop();
         ObfuscationVideo.Source = null;
 
         if (_obfuscationMediaPath is null)
         {
+            _showMediaPlain = false;
+            _controlPanel.SetObfuscationMediaLoadedState(false);
             if (_obfuscateBackground) CaptureObfuscatedBackground();
             ApplyMaskStyle();
             return;
@@ -238,11 +245,13 @@ public partial class OverlayWindow : Window
                 image.Freeze();
                 ObfuscationImage.Source = image;
             }
+            _controlPanel.SetObfuscationMediaLoadedState(true);
         }
         catch (Exception)
         {
             _obfuscationMediaPath = null;
             _obfuscationMediaIsVideo = false;
+            _controlPanel.SetObfuscationMediaLoadedState(false);
         }
 
         ApplyMaskStyle();
@@ -255,8 +264,17 @@ public partial class OverlayWindow : Window
         ObfuscationVideo.Play();
     }
 
+    private void SetMediaPlainMode(bool enabled)
+    {
+        _showMediaPlain = enabled && !string.IsNullOrWhiteSpace(_obfuscationMediaPath);
+        ApplyMaskStyle();
+    }
+
     private void ApplyMaskStyle()
     {
+        var hasMedia = _obfuscateBackground &&
+            !string.IsNullOrWhiteSpace(_obfuscationMediaPath);
+
         MaskPath.Fill = _obfuscateBackground
             ? new SolidColorBrush(System.Windows.Media.Color.FromArgb(
                 (byte)Math.Clamp(_darkness * 35, 10, 45), 180, 195, 215))
@@ -264,6 +282,19 @@ public partial class OverlayWindow : Window
                 (byte)(_darkness * 255), _darknessColor.R,
                 _darknessColor.G, _darknessColor.B));
         MaskPath.Effect = null;
+        MaskPath.Visibility = Visibility.Visible;
+
+        if (hasMedia)
+        {
+            var mediaEffect = _showMediaPlain ? null : new BlurEffect
+            {
+                Radius = 18,
+                KernelType = KernelType.Gaussian,
+                RenderingBias = RenderingBias.Quality
+            };
+            ObfuscationImage.Effect = mediaEffect;
+            ObfuscationVideo.Effect = mediaEffect;
+        }
         ObfuscationImage.Visibility = _obfuscateBackground && !_isPaused &&
             !_obfuscationMediaIsVideo && ObfuscationImage.Source is not null
             ? Visibility.Visible : Visibility.Collapsed;
